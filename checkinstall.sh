@@ -8,3 +8,10 @@ do
 done
 exit $status
 
+for tool in disaz
+do
+	which $tool > /dev/null 2>&1
+	[ $? -ne 0 ] && echo "$tool was not found, some functions may fail"
+done
+
+exit $status
