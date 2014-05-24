@@ -11,8 +11,8 @@ char *legends[] = { "X", "Y", "",                                   /* Generic X
 					"Longitude", "Latitude", "World Map",           /* Map */
 					"Longitude", "Depth (km)", "Longitude Section", /* LonSection */
 					"Latitude", "Depth (km)", "Latitude Section",   /* LatSection */
-					"Mag", "Count", "Magnitude Histogram"           /* Magnitude Histogram */
-				  };
+					"Magnitude", "Count", "Magnitude Histogram"     /* Magnitude Histogram */
+				};
 
 typedef struct points {
 	float *x;
