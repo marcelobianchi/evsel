@@ -1,0 +1,575 @@
+##!/bin/bash
+
+### Version
+# 1.0: MBianchi (12-05-2014)
+#  * evkml
+#
+# 0.9: MBianchi (25/03/2014)
+#  * Added options to wrap and unwrap longitudes
+#
+# 0.8d: MBianchi (14/01/2014)
+#  * Fix a bug that NEIC sends empty depths, value set to NaN
+#
+# 0.8d: MBianchi (30/07/2013)
+#  * Clean up on prepare
+#  * Fix order of parameters for distbaz from lat,lon to lon,lat like a x,y coordinate system
+#
+# 0.8c: MBianchi (30/07/2013)
+#  * Swapped day/month columns on prepare
+#
+# 0.8b: MBianchi (12/07/2013)
+#  * Wrong column order when building the cache.
+#
+# 0.8: MBianchi (28/06/2013)
+#  * upgrade the neic fetcher to use the new concat server
+#
+# 0.7: MBianchi (04/07/2011)
+#  * Included the _langon, _langoff.
+#
+# 0.6pre: MBianchi (08/09/2010)
+#  * Fix NEIC download that when no magnitude is shown it add something to it.
+#  * Added the distance BAZ calculation based on disaz
+#  * Added the filtering by distance and BAZ
+#  * Added the evbreqfast for compatibility with Xiaohui Yuann codes
+#
+# 0.5: MBianchi (26/08/2010)
+#  * Production release
+#
+# 0.4: MBianchi (25/08/2010)
+#  * Implemented "cloud" evflow fetch for the sisbra catalog
+#  * Improoved help with schematic diagram
+#
+# 0.3: MBianchi (24/08/2010)
+#  * Added support for grabbing catalogs from the NEIC webpage using the QED catalog. It can search events from 1974 
+#    up to today.
+#  * Added support for different catalogs source thru the evcatalog command. The evcatalog command set some shell variables
+#    used to select the catalog source.
+#
+# 0.2: MBianchi (18/07/2010 #2)
+#  * Fix Up, consistency check on more methods.
+#  * All exported methods are named ev[name of method].
+#  * Attention to the _langoff/langon methods. The unset LANG is not anymore on effect just at the startup, only when needed.
+#
+# 0.1: MBianchi (18/07/2010)
+#  * Initial release, basic methods for grabbing data, filtering and preparing the catalog for use
+
+export EVVersion=1.0
+
+############################## Methods
+[ -z `typeset -F _langoff` ] && function _langoff(){ LANGOFF=$LANG; unset LANG; }
+[ -z `typeset -F _langon` ] && function _langon(){ [ ! -z "$LANGOFF" ] && export LANG=$LANGOFF; }
+
+function evinfo() {
+ echo "" 
+ echo "This is evsel.function version $EVVersion"
+ echo "Using catalog $EVdata from $EVdatadir directory."
+ echo ""
+}
+
+
+### Core Filter methods
+function _EVmax() {
+  _langoff
+  [ $# -lt 2 ] && cat || awk -v max=$1 -v col=$2 '$col<=max {print $0}'
+  _langon
+}
+
+function _EVmin() {
+  _langoff
+  [ $# -lt 2 ] && cat || awk -v min=$1 -v col=$2 '$col>=min {print $0}'
+  _langon
+}
+
+function _EVrange() {
+  _langoff
+  [ $# -lt 3 ] && cat || awk -v col=$3 -v max=$2 -v min=$1 '$col>=min && $col<=max {print $0}'
+  _langon
+}
+
+### Filter methods
+function evminyear()   { _EVmin $1 1 ; } 
+function evmaxyear()   { _EVmax $1 1; }
+function evrangeyear() { _EVrange $1 $2 1; }
+
+function evmindepth()   { _EVmin $1 9; }
+function evmaxdepth()   { _EVmax $1 9; }
+function evrangedepth() { _EVrange $1 $2 9; }
+
+function evminmag()   { _EVmin $1 10; }
+function evmaxmag()   { _EVmax $1 10; }
+function evrangemag() { _EVrange $1 $2 10; }
+
+function evminlat()   { _EVmin $1 7; }
+function evmaxlat()   { _EVmax $1 7; }
+function evrangelat() { _EVrange $1 $2 7; }
+
+function evminlon()   { _EVmin $1 8; }
+function evmaxlon()   { _EVmax $1 8; }
+function evrangelon() { _EVrange $1 $2 8; }
+
+function evminmon()   { _EVmin $1 2; }
+function evmaxmon()   { _EVmax $1 2; }
+function evrangemon() { _EVrange $1 $2 2; }
+
+function evmindist()   { _EVmin $1 11; } 
+function evmaxdist()   { _EVmax $1 11; }
+function evrangedist() { _EVrange $1 $2 11; }
+
+function evminbaz()   { _EVmin $1 12; } 
+function evmaxbaz()   { _EVmax $1 12; }
+function evrangebaz() { _EVrange $1 $2 12; }
+
+function evbox() { _EVrange $1 $2 7 | _EVrange $3 $4 8; }
+
+### Data post-processing methods
+
+function evwrap() {
+ _langoff
+ [ ! -z "$1" ] && col=$1 || col=8
+ awk -v col="$col" 'function abs(value){return (value>0.0)?value:-value;}; { $col = ($col > 180)?abs($col)-360.0:$col; print; }'
+ _langon
+}
+
+function evunwrap() {
+ _langoff
+ [ ! -z "$1" ] && col=$1 || col=8
+ awk -v col="$col" 'function abs(value){return (value>0.0)?value:-value;}; { $col= ($col < 0)?360-abs($col):$col; print; }'
+ _langon
+}
+
+function evcsv(){
+ echo "year,month,day,hour,minute,second,latitude,longitude,depth,magnitude"
+ _langoff
+ awk 'BEGIN {OFS=","} {print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10}'
+ _langon
+}
+
+function evcount(){
+ _langoff
+ awk 'END {print NR}'
+ _langon
+}
+
+function evkml(){
+    _langoff
+    cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+ <Document>
+
+ <Folder> 
+  <name>GEOFON KML</name>
+  <descriptions>evsel exported data @ $(date)</descriptions>
+EOF
+  awk '{
+  LON=$8;
+  LAT=$7;
+  DEPTH=(800.0-$9)*1000.0;
+  TIME=$1"-"$2"-"$3"T"$4":"$5":"$6"Z";
+  print "<Placemark>";
+  # printf "<name>%s</name>\n",TIME;
+  printf "<description>%s</description>\n",$0;
+  printf "<gx:TimeStamp><when>%s</when></gx:TimeStamp>\n",TIME;
+  print "<styleUrl>#6c8064b0ad665a888645e8f8e09d2e11</styleUrl>";
+  print "<Point>";
+  printf " <coordinates>%f,%f,%f</coordinates>\n",LON,LAT,DEPTH;
+  print "</Point>";
+  print "</Placemark>";
+}'
+    cat <<EOF
+  </Folder>
+  <StyleMap id='6c8064b0ad665a888645e8f8e09d2e11'>
+   <Pair><key>normal</key><styleUrl>#6c8064b0ad665a888645e8f8e09d2e11-inactive</styleUrl></Pair>
+   <Pair><key>highlight</key><styleUrl>#6c8064b0ad665a888645e8f8e09d2e11-active</styleUrl></Pair>
+  </StyleMap>
+  </Document>
+ </kml>
+EOF
+    _langon
+}
+function evprepare() {
+  st="" 
+  error=0
+  for i in $*
+  do
+   [ ! -z "$st" ] && st=$st','
+   case "$i" in
+    count)
+     st=${st}NR
+     ;;
+    lat)
+     st=${st}\$7
+    ;;
+    lon)
+     st=${st}\$8
+    ;;
+    mag)
+     st=${st}\$10
+    ;;
+    depth)
+     st=${st}\$9
+    ;;
+    year)
+     st=${st}\$1\
+    ;;
+    mon|month)
+     st=${st}\$2
+    ;;
+    day)
+     st=${st}\$3
+    ;;
+    packdate)
+     st=${st}substr\(\$1,3,2\)\$2\$3,\$4\$5
+    ;;
+    date)
+     st=${st}\$1\"-\"\$2\"-\"\$3\"T\"\$4\":\"\$5\":\"\$6
+    ;;
+    *)
+     error=1
+    ;;
+   esac
+  done
+
+  _langoff
+  [ $error -eq 0 ] &&  awk "{print $st}" || cat
+  _langon
+}
+
+function evbreqfast(){
+ _langoff
+ awk '{printf "%02d%02d%02d %02d%02d %5.2f %6.2f %7.2f %5.1f\n",substr($1,3,2),$2,$3,$4,$5,$6,$7,$8,$9}'
+ _langon
+}
+
+### Distance & back azimuth calculation
+
+function evdistbaz(){
+ ## very slow ! Deppending on external code "disaz"
+ lat=$2
+ lon=$1
+ 
+ _langoff
+ awk -v lat=$lat -v lon=$lon '{print "echo \""$0,"`disaz ",$7,$8,lat,lon,"`\""}' > tempXXX
+ . ./tempXXX | awk '{print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14,$12}'
+ _langon
+
+ [ -f tempXXX ] && rm tempXXX
+}
+
+### Data grabber 
+
+function evcatalog() {
+ unset EVdatadir
+
+ case "$1" in
+ neic)
+  export EVdatadir=~/.NEICPDE
+  export EVdata="neic"
+  _checkevdatadir
+ ;;
+ iris)
+  export EVdatadir=~/.IRISQED
+  export EVdata="iris"
+  _checkevdatadir
+  ;;
+ *)
+  echo "You are using the $EVdata catalog. You must choose between neic or iris"
+  ;; 
+ esac
+}
+
+function sisbradatFLOW() {
+ LINK='http://moho.iag.usp.br/geoserver/wfs?request=getfeature&service=wfs&version=1.1.0&typename=sismologia:IAG-BoletimSismicoBrasileiro&outputFormat=csv'
+  _langoff
+  wget -O - -o /dev/null $LINK |\
+  awk -F","  '
+    NR>1 {
+      printf "%04d %02d %02d %02d %02d %05.2f %f %f %f %f\n",
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8,
+      $9,
+      $11,
+      $12
+    }'
+    _langon
+}
+
+function evflow() {  
+ case "$1" in 
+  sisbra)
+   sisbradatFLOW
+  ;;
+  *)
+   _checkevdatadir || return 1; 
+   list=`find $EVdatadir -name '*.dat' -print`
+   [ -z "$list" ] && echo "" || cat $list;
+  ;;
+ esac
+
+}
+
+function evgrab(){
+  _checkevdatadir || return 1
+  case "$EVdata" in
+  neic)
+   PDENEICEVgrab "$1"
+  ;;
+  iris)
+   QEDIRISEVgrab "$1"
+  ;;
+  *)
+   echo "Error check catalog first."
+   return 1
+  ;;
+ esac
+}
+
+#"'
+
+function PDENEICEVgrab(){
+ year="$1"
+
+ _checkevdatadir || return 1
+ [ -z "$year" ] && echo "Need a year to fetch." | return 1
+ [ $year -gt `date +%Y` ] && echo "Year $year is in the future." && return 1
+
+ [ -f "$EVdatadir/$year.dat" ] && rm "$EVdatadir/$year.dat"
+ echo -n "Grabbing table for year $year from NEIC ... "
+
+ [ -f tempFFF-ALL ] && rm tempFFF-ALL
+ for month in `seq 1 12`
+ do
+  [ $month -ne 12 ] && nmonth=$(( month + 1 )) || nmonth=1
+  [ $month -ne 12 ] && nyear=$year || nyear=$(( year + 1 ))
+  echo -n "$month "
+  #start=`date -u -d "$year-$month-01" +%s`000
+  #end=`date -u -d "$nyear-$nmonth-01" +%s`000
+  start="$year-$month-01"
+  end="$nyear-$nmonth-01"
+  string="http://comcat.cr.usgs.gov/fdsnws/event/1/query?maxlatitude=90&minlatitude=-90&minlongitude=-180&maxlongitude=180&starttime=${start}&endtime=${end}&minmagnitude=-1&maxmagnitude=10&mindepth=0&maxdepth=800&format=csv"
+  wget -o /dev/null -O "tempFFF" "$string"
+  cp tempFFF /tmp/data-$month
+  awk -F"," 'NR > 1 {print }' tempFFF >> tempFFF-ALL
+  [ -f "tempFFF" ] && rm "tempFFF"
+ done
+
+ _langoff
+ awk -F"," 'NR>1 {
+	print ($1 != "")?substr($1,1,4):"NaN",
+		($1 != "")?substr($1,6,2):"NaN",
+		($1 != "")?substr($1,9,2):"NaN",
+		($1 != "")?substr($1,12,2):"NaN",
+		($1 != "")?substr($1,15,2):"NaN",
+		($1 != "")?substr($1,18,2):"NaN",
+		($2 != "")?$2:"NaN",
+		($3 != "")?$3:"NaN",
+		($4 != "")?$4:"NaN",
+		($5 != "")?$5:"NaN"}' tempFFF-ALL > data.txt
+ _langon
+ [ -f tempFFF-ALL ] && rm tempFFF-ALL
+ echo "Done fetching."
+
+ c1=`cat data.txt | wc -l`
+ c2=`sort -u data.txt | wc -l`
+
+ if [ $c1 -ne $c2 ]; then
+  c12=$(( c1 - c2 ))
+  echo "$c12 Dupplicate events detected (cleaning)"
+  sort -u data.txt > data2.txt
+  mv data2.txt data.txt
+ fi
+
+ mv data.txt "$EVdatadir/$year.dat"
+ [ -f tempFFF ] && rm tempFFF
+}
+
+function QEDIRISEVgrab(){
+ QEDEVaddress="ftp://ftp.iris.washington.edu/pub/HYPOS/QED_daily/"
+ QEDEVextenssion="_qed_daily"
+ year=$1
+
+ _checkevdatadir || return 1
+ [ -z "$year" ] && echo "Need a year to fetch." | return 1
+ [ $year -gt `date +%Y` ] && echo "Year $year is in the future." && return 1
+
+ [ -f "$EVdatadir/$year.dat" ] && rm "$EVdatadir/$year.dat"
+ # echo "Grabbing data from the IRIS/QED table. Data avaliable from 1990 up to now."
+ echo -n "Grabbing table for year $year from IRIS ... "
+
+ wget -o /dev/null -O temp $QEDEVaddress/$year$QEDEVextenssion
+ [ $? -ne 0 ] && echo "Failed." && return 1
+
+ _langoff
+ cut -c 1-50  temp |\
+  sed -e 's/\//\ /g' |\
+  sed -e 's/:/\ /g'  |\
+  awk '{
+   CLAT=substr($7,length($7));
+   VLAT=substr($7,0,length($7)-1);
+   CLON=substr($8,length($8));
+   VLON=substr($8,0,length($8)-1);
+   if (CLAT=="N") { $7=VLAT } else { $7="-"VLAT }
+   if (CLON=="E") { $8=VLON } else { $8="-"VLON }
+   if (NF==10) print $0
+  }' > "$EVdatadir/$year.dat"
+ _langon
+
+ [ -f temp ] && rm temp
+
+ echo "Done."
+ return 0
+}
+
+function evcheck(){
+ year=$1
+ [ -z "$1" ] && return 1
+ _checkevdatadir || return 1
+ [ -f $EVdatadir/$year.dat ] && return 0 || return 1
+}
+
+function evlist(){
+ _checkevdatadir || return 1
+ _langoff
+ list=`find $EVdatadir -name '*.dat' -print | sort`
+ [ -z "$list" ] && echo "No tables downloaded, use the evgrab to get some !." && return 1
+
+ echo "Years avaliable on the database ($EVdata): "
+ for i in $list
+ do
+  year=`basename $i .dat`
+  days=`evflow | evrangeyear $year $year |\
+   awk '{printf "%04d%02d%02d\n",$1,$2,$3}' |\
+   sort -n |\
+   awk '
+   BEGIN {
+    first=""
+    last=""
+   } 
+
+   {
+    if (NR==1) first=$0; 
+    last=$0
+   } 
+   
+   END {
+    print "("substr(first,1,4)"/"substr(first,5,2)"/"substr(first,7,2)" to "substr(last,1,4)"/"substr(last,5,2)"/"substr(last,7,2)"): " NR
+   }'`
+  echo  " $year $days"
+ done
+ _langon
+ echo ""
+ echo " * You can use the evgrab command to download more tables." 
+}
+
+### Helper Methods
+
+function _checkevdatadir() {
+ [ -z "$EVdatadir" ] && echo "Error, choose a catalog first using evcatalog." && return 1
+
+ if [ ! -d "$EVdatadir" ] 
+ then 
+  mkdir -p "$EVdatadir"
+  [ $? -ne 0 ] && echo "Invalid datadir ($EVdatadir)." && return 1
+ fi
+}
+
+### Help method
+
+function evhelp() {
+
+cat << EOF
+*** Event Selection Version $EVVersion ***
+
+** Event Data Download/Flow:
+
+ evcatalog <neic|iris> (Select the source of events, neic=~/.NEIC iris=~/.QED used by all other commands)
+ evgrab <year> (Update the input year in the database by downloading 
+                a new file from the selected catalog. It also convert 
+                the file to a common format)
+ evflow [sisbra] (Initialize the flow of data. Get the data from local disc (default - no parameters) or from a cloud source (sisbra).)
+ evlist (Show the event lists already downloaded.)
+ evinfo (Show which catalog is selected for use and other parameters.)
+
+** Parameter calculation
+
+ evdistbaz <station latitude> <station longitude> (Calculate the distance and back azimuth for each event give the station coordinates)
+
+** Events Post-Processing Methods:
+
+ evcount (Count the number of returned events)
+ evprepare <column 1> <column 2> ... <column n> (Where column can be one of the words: count, lat, lon, depth, mag, year, date)
+ evcsv (Convert the table to the CSV file format with header)
+ evbreqfast (Convert the input list for a format suitable for using with the breqfast program from Yuann)
+ evwrap [longitude column] (Wrap the longitude from -180.0 to 180.0)
+ evunwrap [longitude column] (Unwrap the longitude from 0 to 360.0)
+
+** Methods for filtering:
+
+ evminyear <year>
+ evmaxyear <year>
+ evrangeyear <year min> <year max>
+
+ evmindepth <depth>
+ evmaxdepth <depth>
+ evrangedepth <depth min> <depth max>
+
+ evminmag <magnitude>
+ evmaxmag <magnitude>
+ evrangemag <magnitude min>  <magnitude max>
+
+ evminlat <lat>
+ evmaxlat <lat>
+ evrangelat <lat min> <lat max>
+
+ evminlon <lon>
+ evmaxlon <lon>
+ evrangelon <lon min> <lon max>
+ 
+ evbox <lat min> <lat max> <lon min> <lon max>
+
+ Those methods depends on a full list (after processing by evdistbaz):
+
+ evmindist <distance>
+ evmaxdist <distance>
+ evrangedist <distance min> <distance max>
+
+ evrangebaz <back azimuth>
+ evminbaz <back azimuth>
+ evmaxbaz <back azimuth min> <back azimuth max>
+
+** Grabing Data
+
+            evcatalog/evinfo
+  ---------    ---------    -------------
+  | Cloud | -> | Grab  | -> | Local  Db |
+  ---------    ---------    -------------
+   Internet     evgrab      Your home Dir
+                               evlist
+                               evcheck
+** Using Data
+
+     Internet         Your home Dir
+  ---------------     -------------
+  | Cloud Input |\\  /| Local  Db |
+  --------------- \\/ -------------
+               --------    ----------    ------------------------
+               | Flow | -> | Filter | -> | prepare/post process |
+               --------    ----------    ------------------------
+                evflow      evrange             evprepare
+                            evmin               evcount
+                            evmax               evcsv
+                            evbox               evbreqfast
+                                                evwrap
+                                                evunwrap
+                                                evkml
+EOF
+}
+
+### Initial test of the event data dir
+[ -z "$EVdatadir" ] &&  evcatalog neic
+
