@@ -46,6 +46,20 @@ typedef struct graphcontrol {
 	float ymax;
 } GRAPHCONTROL;
 
+/*
+ * Processors
+ */
+float mulminus(float value) {
+	return value * -1;
+}
+
+float takelog(float value) {
+	return log10(value);
+}
+
+/*
+ * POINTS struct methods
+ */
 void addPt(POINTS *p, float x, float y){
 	p->x = realloc(p->x,sizeof(float) * (p->n+1));
 	p->y = realloc(p->y,sizeof(float) * (p->n+1));
@@ -63,7 +77,34 @@ void addPt(POINTS *p, float x, float y){
 	p->n++;
 }
 
-int parseLine(char *line, POINTS *p) {
+POINTS *newP(int xcol, int ycol){
+	POINTS *p = malloc(sizeof(POINTS));
+	p->n = 0;
+	p->colx = xcol;
+	p->coly = ycol;
+	p->x = NULL;
+	p->y = NULL;
+	p->xmax = 1.0;
+	p->xmin = 0.0;
+	p->ymin = 0.0;
+	p->ymax = 1.0;
+	return p;
+}
+
+void *cleanP(POINTS **p){
+	if ((*p)->x) free((*p)->x);
+	if ((*p)->y) free((*p)->y);
+	(*p)->x = NULL;
+	(*p)->y = NULL;
+	(*p)->n = 0;
+	free((*p));
+	(*p) = NULL;
+}
+
+/*
+ * Execution methods
+ */
+int parseLine(char *line, POINTS *p, float (*xprocessor)(float), float (*yprocessor)(float)) {
 	char *fs = line;
 	int currentcol = 0;
 
@@ -92,40 +133,15 @@ int parseLine(char *line, POINTS *p) {
 
 	if (!gotx || !goty) return 1;
 
+	if (xprocessor != NULL) x = xprocessor(x);
+	if (yprocessor != NULL) y = yprocessor(y);
+
 	addPt(p,x,y);
 	return 0;
 }
 
-POINTS *newP(int xcol, int ycol){
-	POINTS *p = malloc(sizeof(POINTS));
-	p->n = 0;
-	p->colx = xcol;
-	p->coly = ycol;
-	p->x = NULL;
-	p->y = NULL;
-	p->xmax = 1.0;
-	p->xmin = 0.0;
-	p->ymin = 0.0;
-	p->ymax = 1.0;
-	return p;
-}
-
-void *cleanP(POINTS **p){
-	if ((*p)->x) free((*p)->x);
-	if ((*p)->y) free((*p)->y);
-	(*p)->x = NULL;
-	(*p)->y = NULL;
-	(*p)->n = 0;
-	free((*p));
-	(*p) = NULL;
-}
-
 void plot(GRAPHCONTROL *gr, POINTS *p) {
-	if (strncmp(gr->legend[1], "Depth", 5) == 0 ) {
-		cpgenv(gr->xmin, gr->xmax, gr->ymax, gr->ymin, 0, 0);
-	} else {
-		cpgenv(gr->xmin, gr->xmax, gr->ymin, gr->ymax, 0, 0);
-	}
+	cpgenv(gr->xmin, gr->xmax, gr->ymin, gr->ymax, 0, 0);
 
 	cpglab(gr->legend[0], gr->legend[1], gr->legend[2]);
 
@@ -236,13 +252,18 @@ int main(int argc, char **argv) {
 	int i, ID;
 	POINTS *p = NULL;
 
-	/* Command line arguments */
+	float (*xprocessor)(float) = NULL;
+	float (*yprocessor)(float) = NULL;
+
+	/*
+	 * Command line arguments
+	 */
 	for (i = 1; i < argc; i++) {
 		/* Major modes */
 		if (strncmp(argv[i], "map", 3) == 0) {
 			gr.legend = &legends[3];
 			if (p != NULL) showERR("Cannot select MAP mode, only one mode is accepted.");
-			p = newP(7,8);
+			p = newP(8,7);
 		}
 		if (strncmp(argv[i], "graph", 5) == 0) {
 			gr.legend = &legends[0];
@@ -252,12 +273,14 @@ int main(int argc, char **argv) {
 		if (strncmp(argv[i], "lonsection", 10) == 0) {
 			gr.legend = &legends[6];
 			if (p != NULL) showERR("Cannot select lonsection mode, only one mode is accepted.");
-			p = newP(7,9);
+			p = newP(8,9);
+			yprocessor = &mulminus;
 		}
 		if (strncmp(argv[i], "latsection", 10) == 0) {
 			gr.legend = &legends[9];
 			if (p != NULL) showERR("Cannot select latsection mode, only one mode is accepted.");
-			p = newP(8,9);
+			p = newP(7,9);
+			yprocessor = &mulminus;
 		}
 		if (strncmp(argv[i], "maghist", 7) == 0) {
 			gr.legend = &legends[12];
@@ -278,19 +301,31 @@ int main(int argc, char **argv) {
 		if (strncmp(argv[i], "plates", 5) == 0) {
 			gr.hasplates = 1;
 		}
+		if (strncmp(argv[i], "semilogy", 8) == 0) {
+			yprocessor = &takelog;
+		}
+		if (strncmp(argv[i], "semilogx", 8) == 0) {
+			xprocessor = &takelog;
+		}
+		if (strncmp(argv[i], "log", 3) == 0) {
+			xprocessor = &takelog;
+			yprocessor = &takelog;
+		}
 	}
 
+	/*
+	 * File Parsing
+	 */
 	char line[1024];
-	fprintf(stderr,"Reading from STDIN ... \n");
+	fprintf(stderr,"Reading from STDIN ... ");
 	while (fgets(line, 1024, stdin)) {
-		parseLine(line, p);
+		parseLine(line, p, xprocessor, yprocessor);
 	}
+	fprintf(stderr, "%d points\n", p->n);
 
-	//    for(i=0;i<34;i++) {
-	//        float r = random();
-	//        addPt(p, i, i*i + (r / RAND_MAX) * 45.0);
-	//    }
-
+	/*
+	 * Control Block
+	 */
 	ID = cpgopen("/xwindow");
 	cpgask(0);
 
@@ -325,14 +360,17 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	fprintf(stderr, "Read %d points\n", p->n);
 
-
-	/* Exiting block */
+	/*
+	 * Clean up block
+	 */
 	cpgclos();
 
 	cleanP(&p);
 	if (p == NULL) fprintf(stderr,"Cleanned");
 
+	/*
+	 * Done
+	 */
 	return 0;
 }
