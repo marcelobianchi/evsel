@@ -1,2 +1,3 @@
 evgraph-build/*
 CMakeLists.txt.user
+.project
