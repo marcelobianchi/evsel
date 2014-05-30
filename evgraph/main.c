@@ -328,6 +328,8 @@ int main(int argc, char **argv) {
 		gr.haspoints = 1;
 	}
 
+	if (p == NULL) p = newP(1,2);
+
 	/*
 	 * File Parsing
 	 */
