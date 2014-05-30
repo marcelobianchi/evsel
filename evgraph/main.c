@@ -61,8 +61,8 @@ float takelog(float value) {
  * POINTS struct methods
  */
 void addPt(POINTS *p, float x, float y){
-	p->x = realloc(p->x,sizeof(float) * (p->n+1));
-	p->y = realloc(p->y,sizeof(float) * (p->n+1));
+	p->x = realloc(p->x,sizeof(float *) * (p->n+1));
+	p->y = realloc(p->y,sizeof(float *) * (p->n+1));
 	p->x[p->n] = x;
 	p->y[p->n] = y;
 	if (p->n == 0) {
@@ -232,6 +232,16 @@ void rangeadjust(GRAPHCONTROL *gr, POINTS *p, float *x1, float *x2, float *y1, f
 	gr->ymin = ymin;
 }
 
+void order(float *a, float *b) {
+	float c;
+	if (*a > *b) {
+		c = *b;
+		*b = *a;
+		*a = c;
+	}
+	return;
+}
+
 int main(int argc, char **argv) {
 	GRAPHCONTROL gr = {
 		0,   /* Has Points */
@@ -289,13 +299,13 @@ int main(int argc, char **argv) {
 		}
 
 		/* Options */
-		if (strncmp(argv[i], "dots", 4) == 0) {
+		if (strncmp(argv[i], "dot", 3) == 0) {
 			gr.haspoints = 1;
 		}
 		if (strncmp(argv[i], "lines", 5) == 0) {
 			gr.haslines = 1;
 		}
-		if (strncmp(argv[i], "continents", 5) == 0) {
+		if ((strncmp(argv[i], "continent", 9) == 0)||(strncmp(argv[i], "coast", 5) == 0)) {
 			gr.hascontinents = 1;
 		}
 		if (strncmp(argv[i], "plates", 5) == 0) {
@@ -311,6 +321,11 @@ int main(int argc, char **argv) {
 			xprocessor = &takelog;
 			yprocessor = &takelog;
 		}
+	}
+
+	/* When no representation is selected haspoints is default to on */
+	if ((gr.haslines == 0) && (gr.haspoints ==0)) {
+		gr.haspoints = 1;
 	}
 
 	/*
@@ -355,6 +370,8 @@ int main(int argc, char **argv) {
 			x2 = x1;
 			y2 = y1;
 			getonechar(&x2, &y2, 1);
+			order(&x1,&x2);
+			order(&y1,&y2);
 			rangeadjust(&gr, p, &x1, &x2, &y1, &y2);
 			break;
 		}
