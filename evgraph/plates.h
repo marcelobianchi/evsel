@@ -1,4 +1,26 @@
 /*
+    This file is part of evsel package.
+    
+    evgraph is a tool to map 2D point data as extracted by the evsel
+    SHELL script package.
+
+    Copyright (C) 2013  Marcelo B. de Bianchi
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
  * Plate segments obtained from Bird 2002
  * wget http://peterbird.name/oldFTP/PB2002/PB2002_plates.dig.txt
  * awk -F"," 'BEGIN{c=0;}{if (substr($0,0,1) != " ") 

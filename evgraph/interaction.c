@@ -1,9 +1,10 @@
 /*
-    This file is part of sactools package.
+    This file is part of evsel package.
     
-    sactools is a package to managing and do simple processing with SAC
-    seismological files.
-    Copyright (C) 2012  Marcelo B. de Bianchi
+    evgraph is a tool to map 2D point data as extracted by the evsel
+    SHELL script package.
+
+    Copyright (C) 2013  Marcelo B. de Bianchi
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
