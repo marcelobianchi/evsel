@@ -602,6 +602,6 @@ EOF
 ### Initial test of the event data dir
 [ -z "$EVdatadir" ] &&  evcatalog neic
 
-if [ -z "$PS1" ]; then
-	echo "source $0 # You should execute this command in order to make it active in the current shell"
-fi
+#if [ -z "$PS1" ]; then
+#	echo "source $0 # You should execute this command in order to make it active in the current shell"
+#fi
