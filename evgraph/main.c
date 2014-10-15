@@ -257,7 +257,6 @@ float linefit(float *x,float *y,int npts,float *a,float *b)
 void load(SET *s) {
 	char cmd[1024];
 
-//	fprintf(stderr,"Start load.");
 	if (s->n!=0) {
 		if (s->x != NULL) free(s->x);
 		if (s->y != NULL) free(s->y);
@@ -272,8 +271,11 @@ void load(SET *s) {
 		s->n = 0;
 	}
 
-//	fprintf(stderr,"CMD LINE.");
-	sprintf(cmd,"./run.sh  %d %d %f %f %f %f %f %f %f %f _TMP",
+	char filename[] = "/tmp/evgraph_XXXXXX";
+	mktemp(filename);
+
+	getpid();
+	sprintf(cmd,"evgraph-helper.sh  %d %d %f %f %f %f %f %f %f %f %s",
 			s->y1,
 			s->y2,
 			s->m1,
@@ -283,27 +285,37 @@ void load(SET *s) {
 			s->lat1,
 			s->lat2,
 			s->lon1,
-			s->lon2);
+			s->lon2,
+			filename);
 	system(cmd);
 
-//	fprintf(stderr,"PROPER LOAD.");
 	FILE *ent;
-	ent = fopen("_TMP","r");
+	ent = fopen(filename,"r");
 	if (ent == NULL) return;
 	int i = 0;
 	while (!feof(ent)) {
+		float x, y, m , d;
+
 		s->x = (float*)realloc(s->x, sizeof(float) * (i+1));
 		s->y = (float*)realloc(s->y, sizeof(float) * (i+1));
 		s->d = (float*)realloc(s->d, sizeof(float) * (i+1));
 		s->m = (float*)realloc(s->m, sizeof(float) * (i+1));
-		fscanf(ent, "%f %f %f %f\n", &s->x[i], &s->y[i], &s->d[i], &s->m[i]);
+
+		fscanf(ent, "%f %f %f %f\n", &x, &y, &d, &m);
+		if (x == 0 && y == 0 && d == 0 && m == 0)
+			continue;
+
+		s->x[i] = x;
+		s->y[i] = y;
+		s->d[i] = d;
+		s->m[i] = m;
+
 		i++;
 	}
 	s->n = i;
 	fclose(ent);
-	system("rm -f _TMP");
+	remove(filename);
 
-//	fprintf(stderr, "END load %d.", s->n);
 	return;
 }
 
@@ -731,7 +743,7 @@ int main(int argc, char **argv) {
 	rangeadjust(&control, &mainset, NULL, NULL, NULL, NULL);
 
 	ID = cpgopen("/xwindow");
-	resizemax(0.8);
+	resizemax(0.95);
 	cpgask(0);
 
 	while (ch != 'Q') {
