@@ -15,5 +15,5 @@ evflow |\
  evrangedepth "${5}" "${6}" |\
  evrangelat "${7}" "${8}" |\
  evrangelon "${9}" "${10}" |\
- evprepare lon lat depth mag > ${11}
+ evprepare lon lat depth mag year mon day > ${11}
  
