@@ -53,6 +53,9 @@ typedef struct set {
 	float *y;
 	float *m;
 	float *d;
+	int *yr;
+	int *mo;
+	int *dy;
 
 	int y1;
 	int y2;
@@ -111,27 +114,113 @@ GRAPHCONTROL control = {
  * Color derivation function
  */
 
+
 int magcolor(float mag) {
-	if (mag < 4.)
-		return 1;
-	else if (mag< 6)
-		return 2;
+	if (mag < 2.)
+		return 10;
+	else if (mag < 4)
+		return 9;
+	else if (mag < 6)
+		return 8;
+	else if (mag < 8.5)
+		return 6;
 	else
-		return 3;
+		return 12;
 }
 
 int depthcolor(float depth) {
-	if (depth < 35.)
-		return 1;
-	else if (depth < 80)
-		return 2;
-	else if (depth < 120)
-		return 3;
-	else if (depth < 300)
+
+
+	if (depth < 15.)
 		return 4;
-	else
+	else if (depth < 35)
+		return 11;
+	else if (depth < 70)
 		return 5;
+	else if (depth < 120)
+		return 12;
+	else if (depth < 300)
+		return 13;
+	else
+		return 2;
 }
+
+void scalemag() {
+	int i;
+	char t[24];
+
+	cpgsci(1);
+	cpgmtxt("T",1.0,0.0,0.0,"Mag.:");
+	cpgsvp(0.12, 0.25, 0.912, 0.922);
+	cpgswin(0.0, 11.0, 0.0, 2.0);
+
+	cpgsch(0.4);
+	for(i=0.0;i<10.0;i++) {
+		cpgsci(magcolor((float)i));
+		sprintf(t,"%.1d",i);
+		cpgtext(i+1-0.12,2.8,t);
+		cpgpt1(i+1,1.0,16);
+	}
+	cpgsch(FS);
+	cpgsci(1);
+
+	return;
+}
+
+void scaledep() {
+	int i, d;
+	char t[24];
+
+	cpgsci(1);
+	cpgmtxt("T",1.0,0.0,0.0,"Prof.:");
+
+	cpgsvp(0.12, 0.25, 0.912, 0.922);
+	cpgswin(0.0,700.0, 0.0, 2.0);
+
+	cpgsch(0.4);
+	for(i=1.0;i<700.0;i+=10.0) {
+		cpgsci(depthcolor((float)i));
+		cpgpt1(i,1.0,16);
+	}
+
+	cpgsci(1);
+
+	d = 0;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-25.0,2.8,t);
+
+	d = 15;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-35.0,-1.8,t);
+
+	d = 35;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-20.0,2.8,t);
+
+	d = 70;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-25,-1.8,t);
+
+	d = 120;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-50,2.8,t);
+
+	d = 300;
+	cpgsci(depthcolor((float)d));
+	sprintf(t,"%.1d",d);
+	cpgtext(d-50,2.8,t);
+
+	cpgsch(FS);
+	cpgsci(1);
+
+	return;
+}
+
 
 /*
  *Graphic control & aux functions
@@ -262,11 +351,17 @@ void load(SET *s) {
 		if (s->y != NULL) free(s->y);
 		if (s->m != NULL) free(s->m);
 		if (s->d != NULL) free(s->d);
+		if (s->yr != NULL) free(s->yr);
+		if (s->mo != NULL) free(s->mo);
+		if (s->dy != NULL) free(s->dy);
 
 		s->x = NULL;
 		s->y = NULL;
-		s->m = NULL;
 		s->d = NULL;
+		s->m = NULL;
+		s->yr = NULL;
+		s->mo = NULL;
+		s->dy = NULL;
 
 		s->n = 0;
 	}
@@ -295,13 +390,17 @@ void load(SET *s) {
 	int i = 0;
 	while (!feof(ent)) {
 		float x, y, m , d;
+		int yr, mo, dy;
 
 		s->x = (float*)realloc(s->x, sizeof(float) * (i+1));
 		s->y = (float*)realloc(s->y, sizeof(float) * (i+1));
 		s->d = (float*)realloc(s->d, sizeof(float) * (i+1));
 		s->m = (float*)realloc(s->m, sizeof(float) * (i+1));
+		s->yr = (int*)realloc(s->yr, sizeof(int) * (i+1));
+		s->mo = (int*)realloc(s->mo, sizeof(int) * (i+1));
+		s->dy = (int*)realloc(s->dy, sizeof(int) * (i+1));
 
-		fscanf(ent, "%f %f %f %f\n", &x, &y, &d, &m);
+		fscanf(ent, "%f %f %f %f %d %d %d\n", &x, &y, &d, &m, &yr, &mo, &dy);
 		if (x == 0 && y == 0 && d == 0 && m == 0)
 			continue;
 
@@ -309,6 +408,9 @@ void load(SET *s) {
 		s->y[i] = y;
 		s->d[i] = d;
 		s->m[i] = m;
+		s->yr[i] = yr;
+		s->mo[i] = mo;
+		s->dy[i] = dy;
 
 		i++;
 	}
@@ -325,17 +427,20 @@ void reset(SET *s) {
 	s->y = NULL;
 	s->m = NULL;
 	s->d = NULL;
+	s->yr = NULL;
+	s->mo = NULL;
+	s->dy = NULL;
 
-	s->y1 = 1992;
-	s->y2 = 1992;
-	s->m1 = 3;
-	s->m2 = 9;
-	s->d1 = 0;
-	s->d2 = 1000;
-	s->lat1 = -90;
-	s->lat2 = 90;
-	s->lon1 = -180;
-	s->lon2 = 180;
+	s->y1 = 1995;
+	s->y2 = 1999;
+	s->m1 = 0.0;
+	s->m2 = 10.0;
+	s->d1 = 0.0;
+	s->d2 = 1000.0;
+	s->lat1 = -90.0;
+	s->lat2 = 90.0;
+	s->lon1 = -180.0;
+	s->lon2 = 180.0;
 
 	s->region = 0;
 
@@ -515,7 +620,7 @@ void plothistogram(SET *p, float w, int mode) {
 	return;
 }
 
-void plotsection(SET *p, int mode) {
+void plotsection(SET *p, GRAPHCONTROL *gr, int mode) {
 	float *x = (mode == LAT) ? p->y : p->x;
 	float *y = p->d;
 	int i;
@@ -545,7 +650,10 @@ void plotsection(SET *p, int mode) {
 	cpgbbuf();
 
 	for(i = 0; i< p->n; i++) {
-		cpgsci(depthcolor(y[i]));
+		if (gr->colormode == COLORDEPTH)
+			cpgsci(depthcolor(y[i]));
+		else if (gr->colormode == COLORMAG)
+			cpgsci(magcolor(p->m[i]));
 		cpgpt1(x[i], y[i], 1);
 	}
 	cpgsci(1);
@@ -625,19 +733,25 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 		/* Graphs */
 	int i;
 	if (gr->haspoints) {
+
+		int symbol = 17;
+		cpgsch(0.4);
+
 		if (gr->colormode == COLORDEPTH)
 			for(i = 0; i< p->n; i++) {
 				cpgsci(depthcolor(p->d[i]));
-				cpgpt1(p->x[i], p->y[i], 1);
+				cpgpt1(p->x[i], p->y[i], symbol);
 			}
 		else if (gr->colormode == COLORMAG)
 			for(i = 0; i< p->n; i++) {
 				cpgsci(magcolor(p->m[i]));
-				cpgpt1(p->x[i], p->y[i], 1);
+				cpgpt1(p->x[i], p->y[i], symbol);
 			}
 		else
-			cpgpt(p->n, p->x, p->y, 1);
+			cpgpt(p->n, p->x, p->y, symbol);
+
 		cpgsci(1);
+		cpgsch(FS);
 	}
 
 	if (gr->hascontinents == 1) {
@@ -669,29 +783,48 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 			cpgdraw(plates[i][0], plates[i][1]);
 		}
 	}
+
+	if (gr->colormode == COLORMAG)
+		scalemag();
+	else if (gr->colormode == COLORDEPTH)
+		scaledep();
+
 	cpgsci(1);
 	cpgslw(1);
 
 	cpgebuf();
+
+	cpgsvp(0.07, 0.93, 0.35, 0.9);
+	cpgswin(gr->xmin, gr->xmax, gr->ymin, gr->ymax);
+
 	return;
 }
 
 int enhance(GRAPHCONTROL *c, SET *p, int i) {
 	float x, y, d, m;
+	int yr, mo, dy;
 	char t[1024];
 
 	x = p->x[i];
 	y = p->y[i];
 	d = p->d[i];
 	m = p->m[i];
+	yr = p->yr[i];
+	mo = p->mo[i];
+	dy = p->dy[i];
 
 	float xhalfwindow = (c->xmax + c->xmin) / 2;
 	float yhalfwindow = (c->ymax + c->ymin) / 2;
 
-			// Mark the dot
-	cpgsch(FS);
-	cpgsci(5);
-	cpgpt1(x, y,-4);
+	// Mark the dot
+	cpgsch(FS+0.5);
+	if(c->colormode == COLORMAG)
+		cpgsci(magcolor(m));
+	else if (c->colormode == COLORDEPTH)
+		cpgsci(depthcolor(d));
+	else
+		cpgsci(1);
+	cpgpt1(x, y, -4);
 	cpgsci(1);
 	cpgsch(FS);
 
@@ -713,7 +846,7 @@ int enhance(GRAPHCONTROL *c, SET *p, int i) {
 	cpgrect(0.02, .98, 0.02, 0.98);
 	cpgsci(1);
 
-	sprintf(t,"Evento, %d",i);
+	sprintf(t,"Evento, %d (%04d/%02d/%02d)",i, yr, mo, dy);
 	cpgmtxt("T", -1.0, 0.1, .0, t);
 	sprintf(t,"Long. %.2f Lat. %.2f",x,y);
 	cpgmtxt("T", -2.0, 0.1, .0, t);
@@ -743,7 +876,7 @@ int main(int argc, char **argv) {
 	rangeadjust(&control, &mainset, NULL, NULL, NULL, NULL);
 
 	ID = cpgopen("/xwindow");
-	resizemax(0.95);
+	resizemax(0.85);
 	cpgask(0);
 
 	while (ch != 'Q') {
@@ -754,7 +887,7 @@ int main(int argc, char **argv) {
 		}
 
 		if (mainset.region) {
-			plotsection(&mainset, sectionmode);
+			plotsection(&mainset, &control, sectionmode);
 			plothistogram(&mainset, binw, histmode);
 		}
 
@@ -763,6 +896,12 @@ int main(int argc, char **argv) {
 		cpgswin(control.xmin, control.xmax, control.ymin, control.ymax);
 		ch = getonechar(&x1, &y1, 0);
 		switch(ch) {
+
+		case('R'): {
+			reset(&mainset);
+			load(&mainset);
+			break;
+		}
 
 		case('B'): {
 			binw = lerfloat("Entre com o valor da largura do bin?");
