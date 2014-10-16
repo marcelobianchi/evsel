@@ -253,6 +253,10 @@ void resizemax(float scale)
 
 void minmax(float *x, int n, float *min, float *max) {
 	int i;
+	*min = *max = 0.0;
+
+	if (n == 0) return;
+
 	*min = *max = x[0];
 	for (i = 0; i < n; i++) {
 		if (*min > x[i]) *min = x[i];
@@ -392,6 +396,11 @@ void load(SET *s) {
 	while (!feof(ent)) {
 		float x, y, m , d;
 		int yr, mo, dy;
+		int n;
+
+		n = fscanf(ent, "%f %f %f %f %d %d %d\n", &x, &y, &d, &m, &yr, &mo, &dy);
+		if (n != 7)
+			continue;
 
 		s->x = (float*)realloc(s->x, sizeof(float) * (i+1));
 		s->y = (float*)realloc(s->y, sizeof(float) * (i+1));
@@ -401,9 +410,6 @@ void load(SET *s) {
 		s->mo = (int*)realloc(s->mo, sizeof(int) * (i+1));
 		s->dy = (int*)realloc(s->dy, sizeof(int) * (i+1));
 
-		fscanf(ent, "%f %f %f %f %d %d %d\n", &x, &y, &d, &m, &yr, &mo, &dy);
-		if (x == 0 && y == 0 && d == 0 && m == 0)
-			continue;
 
 		s->x[i] = x;
 		s->y[i] = y;
@@ -552,6 +558,15 @@ void plothistogram(SET *p, float w, int mode) {
 	float a, b;
 	float rms = -1;
 
+	cpgsvp(0.63, 0.93, 0.07, 0.30);
+
+	/* Check we have data */
+	if (p->n ==0) {
+		cpgswin(0.0, 1.0, 0.0, 1.0);
+		cpgmtxt("T",-3, 0.5, 0.5, "-- Sem Dados -- ");
+		return;
+	}
+
 	if (mode == MAG) {
 		nb = gomag(x, p->n, w, &bins, &freq);
 		rms = linefit(bins, freq, nb, &a, &b);
@@ -562,7 +577,6 @@ void plothistogram(SET *p, float w, int mode) {
 	/*
 	 * Plot
 	 */
-	cpgsvp(0.63, 0.93, 0.07, 0.30);
 
 	minmax(x, p->n, &x1, &x2);
 	minmax(freq, nb, &y1, &y2);
@@ -630,6 +644,14 @@ void plotsection(SET *p, GRAPHCONTROL *gr, int mode) {
 	int i;
 
 	float x1, x2, y1, y2;
+
+	/* Check we have data */
+	if (p->n ==0) {
+		cpgsvp(0.07, 0.52, 0.07, 0.30);
+		cpgswin(0.0, 1.0, 0.0, 1.0);
+		cpgmtxt("T",-3, 0.5, 0.5, "-- Sem Dados -- ");
+		return;
+	}
 
 	x1 = x2 = x[0];
 	y1 = y2 = y[0];
@@ -736,7 +758,7 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 
 		/* Graphs */
 	int i;
-	if (gr->haspoints) {
+	if (gr->haspoints && p->n > 0) {
 
 		int symbol = 17;
 		cpgsch(0.4);
