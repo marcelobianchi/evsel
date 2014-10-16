@@ -28,6 +28,7 @@
 #include <interaction.h>
 #include <continents.h>
 #include <plates.h>
+#include <borders.h>
 #include <X11/Xlib.h>
 
 #define FS 0.7
@@ -431,8 +432,8 @@ void reset(SET *s) {
 	s->mo = NULL;
 	s->dy = NULL;
 
-	s->y1 = 1995;
-	s->y2 = 1999;
+	s->y1 = 1990;
+	s->y2 = 2012;
 	s->m1 = 0.0;
 	s->m2 = 10.0;
 	s->d1 = 0.0;
@@ -565,7 +566,7 @@ void plothistogram(SET *p, float w, int mode) {
 
 	minmax(x, p->n, &x1, &x2);
 	minmax(freq, nb, &y1, &y2);
-	cpgswin(x1, x2, y1, y2 * 1.2);
+	cpgswin(x1, x2, y1 - (y2-y1)*0.1, y2 * 1.2);
 	cpgbox("BCNST", 0.0, 0, "BCMST", 0.0, 0);
 
 	/*
@@ -578,10 +579,13 @@ void plothistogram(SET *p, float w, int mode) {
 	if (mode == MAG) {
 		cpgmtxt("R", 3.0, 0.5, 0.5, "Log(n) Acumulado");
 		cpgmtxt("B", 3.0, 0.5, 0.5, "Magnitude");
+
 	} else {
 		cpgmtxt("R", 3.0, 0.5, 0.5, "Log(n)");
 		cpgmtxt("B", 3.0, 0.5, 0.5, "Profundidade (km)");
 	}
+	sprintf(t,"Min: %.1f Max: %.1f",x1,x2);
+	cpgmtxt("B", -1.0,0.05,0.0,t);
 	cpgsch(FS);
 
 	/*
@@ -754,10 +758,9 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 		cpgsch(FS);
 	}
 
-	if (gr->hascontinents == 1) {
+	if (gr->hascontinents >= 1) {
 		cpgsci(1);
-		cpgslw(2);
-
+		cpgslw(4);
 		for(i=0; i < ncontinentes; i++) {
 			if (continentes[i][0] == -999 && continentes[i][1] == 999 ) {
 				i++;
@@ -765,6 +768,19 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 				continue;
 			}
 			cpgdraw(continentes[i][0], continentes[i][1]);
+		}
+
+		if (gr->hascontinents >=2) {
+			cpgslw(1);
+			cpgsci(15);
+			for(i=0; i < nborders; i++) {
+				if (borders[i][0] == -999 && borders[i][1] == 999 ) {
+					i++;
+					cpgmove(borders[i][0], borders[i][1]);
+					continue;
+				}
+				cpgdraw(borders[i][0], borders[i][1]);
+			}
 		}
 	}
 
@@ -867,8 +883,8 @@ int main(int argc, char **argv) {
 
 	int enhanceid = -1;
 	int sectionmode = LON;
-	int histmode = MAG;
-	float binw = 0.25;
+	int histmode = DEP;
+	float binw = 10.0;
 
 	reset(&mainset);
 	load(&mainset);
@@ -878,6 +894,14 @@ int main(int argc, char **argv) {
 	ID = cpgopen("/xwindow");
 	resizemax(0.85);
 	cpgask(0);
+
+	/*
+	 * This a bug-fix for the gmt command that outputs the borders wrapped.
+	 */
+	int i;
+	for(i=0; i < nborders; i++)
+		if (borders[i][0] != -999 && borders[i][0] > 180)
+			borders[i][0] = borders[i][0] - 360.0;
 
 	while (ch != 'Q') {
 		plot(&control, &mainset);
@@ -919,7 +943,8 @@ int main(int argc, char **argv) {
 		}
 
 		case('1'): {
-			control.hascontinents = (control.hascontinents == 1) ? 0 : 1;
+			control.hascontinents++;
+			if (control.hascontinents > 2) control.hascontinents = 0;
 			break;
 		}
 
@@ -948,7 +973,7 @@ int main(int argc, char **argv) {
 
 		case ('H'): {
 			histmode = (histmode == MAG) ? DEP : MAG;
-			binw = (histmode == MAG) ? 0.25 : 25.0;
+			binw = (histmode == MAG) ? 0.1 : 10.0;
 			break;
 		}
 
