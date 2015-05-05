@@ -39,11 +39,11 @@ void alert(int level)
 	cpgsci(level);
 	cpgrect(0.0, 1.0, 0.0, 1.0);
 	cpgsci(0);
-	cpgrect(0.03, .97, 0.03, 0.97);
+	cpgrect(0.02, .98, 0.03, 0.97);
 	cpgsci(1);
 
-	cpgmtxt("T", -1.0, 0.02, .0, message);
-	cpgmtxt("B", -1.0, 0.02, .0, "Type 'q' or <ENTER> to quit");
+	cpgmtxt("T", -1.0, 0.04, .0, message);
+	cpgmtxt("B", -1.0, 0.04, .0, "Type 'q' or <ENTER> to continue");
 	while (op != 'Q' && op != 13) {
 		cpgband(7, 0, 0, 0, &ax, &ay, &op);
 		op = toupper(op);

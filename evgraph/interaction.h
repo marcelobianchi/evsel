@@ -24,6 +24,7 @@
 
 #define ERROR 2
 #define WARN 1
+#define INFO 14
 #define OK 0
 
 /* Interaction */

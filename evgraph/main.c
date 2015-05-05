@@ -91,6 +91,8 @@ typedef struct graphcontrol {
 	float xmax;
 	float ymin;
 	float ymax;
+
+	int printout;
 } GRAPHCONTROL;
 
 SET mainset;
@@ -108,7 +110,8 @@ GRAPHCONTROL control = {
 	0,   /* xmin */
 	0,   /* xmax */
 	0,   /* ymin */
-	0    /* ymax */
+	0,   /* ymax */
+	0    /* printout */
 };
 
 /*
@@ -117,16 +120,22 @@ GRAPHCONTROL control = {
 
 
 int magcolor(float mag) {
-	if (mag < 2.)
-		return 10;
+	if (mag < 3.)
+		return 14;
 	else if (mag < 4)
 		return 9;
+	else if (mag < 5)
+		return 7;
 	else if (mag < 6)
 		return 8;
-	else if (mag < 8.5)
+	else if (mag < 7)
+		return 13;
+	else if (mag < 8)
 		return 6;
+	else if (mag < 9)
+			return 12;
 	else
-		return 12;
+		return 2;
 }
 
 int depthcolor(float depth) {
@@ -599,15 +608,22 @@ void plothistogram(SET *p, float w, int mode) {
 		cpgmtxt("B", 3.0, 0.5, 0.5, "Profundidade (km)");
 	}
 	sprintf(t,"Min: %.1f Max: %.1f",x1,x2);
-	cpgmtxt("B", -1.0,0.05,0.0,t);
+	if (mode == MAG) {
+		cpgmtxt("B", -1.0, 0.05, 0.0,t);
+	} else {
+		cpgmtxt("T", -2.0, 0.95, 1.0,t);
+	}
 	cpgsch(FS);
 
 	/*
 	 * Plots
 	 */
 	cpgbin(nb, bins, freq, 1);
-	cpgmove(x1, a*x1 + b);
-	cpgdraw(x2, a*x2 + b);
+
+	if (mode == MAG) {
+		cpgmove(x1, a*x1 + b);
+		cpgdraw(x2, a*x2 + b);
+	}
 
 	if (mode == MAG) {
 		cpgsch(0.7);
@@ -672,7 +688,7 @@ void plotsection(SET *p, GRAPHCONTROL *gr, int mode) {
 	cpgmtxt("R", 1.0, 0.0, 0.0, "[L] Trocar Lat/Lon");
 	cpgmtxt("B", 3.0, 0.5, 0.5, (mode == LAT) ? "Latitude\\m94" : "Longitude\\m94");
 	cpgmtxt("L", 3.0, 0.5, 0.5, "Profundidade (km)");
-	cpgsch(FS);
+	(gr->printout) ? cpgsch(1.5) : cpgsch(FS);
 	cpgbbuf();
 
 	for(i = 0; i< p->n; i++) {
@@ -682,14 +698,15 @@ void plotsection(SET *p, GRAPHCONTROL *gr, int mode) {
 			cpgsci(magcolor(p->m[i]));
 		cpgpt1(x[i], y[i], 1);
 	}
-	cpgsci(1);
+	cpgebuf();
+
 
 
 	// Terminate
+	cpgsch(FS);
 	cpgsci(1);
 	cpgslw(1);
 
-	cpgebuf();
 	return;
 }
 
@@ -697,6 +714,8 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 	char t[1024];
 
 	cpgsch(FS);
+	cpgsci(1);
+
 	cpgsvp(0.07, 0.93, 0.35, 0.9);
 	cpgeras();
 	cpgswin(gr->xmin, gr->xmax, gr->ymin, gr->ymax);
@@ -717,6 +736,8 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 	(p->region) ? cpgsci(ON) : cpgsci(OFF);
 	cpgmtxt("T", yp, 0.6, 0.0, t);
 	cpgsci(1);
+
+	cpgmtxt("T", yp, 0.85, 0.0, "[=] Salvar Print-out");
 
 
 	yp -= 1.2;
@@ -747,10 +768,12 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 	(gr->hascontinents) ? cpgsci(ON) : cpgsci(OFF);
 	sprintf(t,"[1] Continentes");
 	cpgmtxt("R", 1.0, 0.25, 0.0, t);
+	cpgsci(1);
 
 	(gr->hasplates) ? cpgsci(ON) : cpgsci(OFF);
 	sprintf(t,"[2] Placas");
 	cpgmtxt("R", 1.0, 0.0, 0.0, t);
+	cpgsci(1);
 
 	// Legenda cores
 	cpgsci(1);
@@ -902,7 +925,7 @@ int main(int argc, char **argv) {
 	int ID;
 	float x1, y1, x2, y2;
 	char ch;
-
+	char filename[1024];
 	int enhanceid = -1;
 	int sectionmode = LON;
 	int histmode = DEP;
@@ -926,9 +949,26 @@ int main(int argc, char **argv) {
 			borders[i][0] = borders[i][0] - 360.0;
 
 	while (ch != 'Q') {
+		if (control.printout) {
+			lerchar("Entre com o nome do arquivo", filename, 1000);
+			if (strlen(filename) == 0) {
+				strcpy(message, "Nome invalido.");
+				alert(ERROR);
+				control.printout = 0;
+			} else {
+				if (strlen(filename) < 3 || strncasecmp( &filename[strlen(filename)-3], ".ps", 3) != 0) {
+					sprintf(filename,"%s.ps/cps",filename);
+				} else {
+					sprintf(filename,"%s/cps",filename);
+				}
+				cpgopen(filename);
+				cpgask(0);
+			}
+		}
+
 		plot(&control, &mainset);
 
-		if (enhanceid != -1) {
+		if (control.printout == 0 && enhanceid != -1) {
 			enhanceid = enhance(&control, &mainset, enhanceid);
 		}
 
@@ -937,12 +977,27 @@ int main(int argc, char **argv) {
 			plothistogram(&mainset, binw, histmode);
 		}
 
+		if (control.printout) {
+			cpgclos();
+			cpgslct(ID);
+			control.printout = 0;
+
+			filename[strlen(filename) - 4] = '\0';
+			sprintf(message, "Print Out saved to file %s", filename);
+			alert(INFO);
+
+			continue;
+		}
+
 		// Restore default map position
 		cpgsvp(0.07, 0.93, 0.35, 0.9);
 		cpgswin(control.xmin, control.xmax, control.ymin, control.ymax);
 		ch = getonechar(&x1, &y1, 0);
 		switch(ch) {
-
+		case('='): {
+			control.printout = 1;
+			break;
+		}
 		case('R'): {
 			reset(&mainset);
 			load(&mainset);
