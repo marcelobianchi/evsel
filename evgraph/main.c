@@ -328,23 +328,28 @@ void orderint(int *a, int *b) {
 	return;
 }
 
-float linefit(float *x,float *y,int npts,float *a,float *b)
+float linefit(float *x,float *y,int npts, float lm, float hm, float *a,float *b)
 {
-	int i;
+	int i, n;
 	float D,Sxx,Sy,Sx,Sxy;
 	float rms=0.0;
 
+	n = 0;
 	Sxx=Sx=Sy=Sxy=D=0;
 	for(i=0;i<npts;i++)
 	{
+		if ( lm >= 0 && x[i] > hm ) continue;
+		if ( lm >= 0 && x[i] < lm ) continue;
+
+		n++;
 		Sxx+=powf(x[i],2);
 		Sx+=x[i];
 		Sy+=y[i];
 		Sxy+=x[i]*y[i];
 	}
-	D=npts*Sxx-powf(Sx,2);
+	D=n*Sxx-powf(Sx,2);
 	*b=(1.0/D)*(Sxx*Sy-Sx*Sxy);
-	*a=(1.0/D)*((float)npts*Sxy-Sx*Sy);
+	*a=(1.0/D)*((float)n*Sxy-Sx*Sy);
 
 	for(i=0;i<npts;i++)
 		rms+=pow(y[i]-((*a)*x[i]+(*b)),2);
@@ -553,7 +558,7 @@ int godep(float *x, int n, float w, float **bins, float **freq) {
 	return nb;
 }
 
-void plothistogram(SET *p, float w, int mode) {
+void plothistogram(SET *p, float w, int mode, float lm, float hm) {
 	float *x = (mode == MAG) ? p->m : p->d;
 	int i;
 	char t[1024];
@@ -562,7 +567,7 @@ void plothistogram(SET *p, float w, int mode) {
 
 	float *bins = NULL;
 	float *freq = NULL;
-	float nb;
+	int nb;
 
 	float a, b;
 	float rms = -1;
@@ -578,7 +583,7 @@ void plothistogram(SET *p, float w, int mode) {
 
 	if (mode == MAG) {
 		nb = gomag(x, p->n, w, &bins, &freq);
-		rms = linefit(bins, freq, nb, &a, &b);
+		rms = linefit(bins, freq, nb, lm, hm, &a, &b);
 	} else {
 		nb = godep(x, p->n, w, &bins, &freq);
 	}
@@ -623,6 +628,17 @@ void plothistogram(SET *p, float w, int mode) {
 	if (mode == MAG) {
 		cpgmove(x1, a*x1 + b);
 		cpgdraw(x2, a*x2 + b);
+		if ( lm >= 0.0 ) {
+			float temp;
+			
+			cpgsci(2);
+			cpgsch(1.2);
+			temp = fabs((a*x1+b) - (a*x2+b));
+			cpgpt1(lm, a*lm+b -temp * 0.06, 30);
+			cpgpt1(hm, a*hm+b -temp * 0.06, 30);
+			cpgsci(1);
+			cpgsch(FS);
+		}
 	}
 
 	if (mode == MAG) {
@@ -688,7 +704,7 @@ void plotsection(SET *p, GRAPHCONTROL *gr, int mode) {
 	cpgmtxt("R", 1.0, 0.0, 0.0, "[L] Trocar Lat/Lon");
 	cpgmtxt("B", 3.0, 0.5, 0.5, (mode == LAT) ? "Latitude\\m94" : "Longitude\\m94");
 	cpgmtxt("L", 3.0, 0.5, 0.5, "Profundidade (km)");
-	(gr->printout) ? cpgsch(1.5) : cpgsch(FS);
+	(gr->printout) ? cpgsch(1.5) : (p->n > 50) ? cpgsch(FS) : cpgsch(1.0);
 	cpgbbuf();
 
 	for(i = 0; i< p->n; i++) {
@@ -751,6 +767,8 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 	sprintf(t,"Longitude: %.2f/%.2f",p->lon1, p->lon2);
 	cpgmtxt("T", yp, 0.6, 0.0, t);
 
+        cpgmtxt("T", yp, 0.85, 0.0, "[J] Definir intervalo");
+
 	yp -= 1.2;
 
 	sprintf(t,"Latitude: %.2f/%.2f", p->lat1, p->lat2);
@@ -758,9 +776,9 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 
 	sprintf(t,"[w] Zoom para todo o mapa");
 	cpgmtxt("T", yp, 0.25, 0.0, t);
-
-
-
+        
+        cpgmtxt("T", yp, 0.85, 0.0, "    de ajuste");
+        
 	sprintf(t,"[c] Cor: %s", (gr->colormode == COLORDEPTH) ? "Profundidade" : (gr->colormode == COLORMAG) ? "Magnitude" : "Neutra");
 	cpgmtxt("R", 1.0, 1.0, 1.0, t);
 
@@ -784,7 +802,7 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 	if (gr->haspoints && p->n > 0) {
 
 		int symbol = 17;
-		cpgsch(0.4);
+		(p->n > 50) ?  cpgsch(0.4) : cpgsch(FS);
 
 		if (gr->colormode == COLORDEPTH)
 			for(i = 0; i< p->n; i++) {
@@ -805,7 +823,7 @@ void plot(GRAPHCONTROL *gr, SET *p) {
 
 	if (gr->hascontinents >= 1) {
 		cpgsci(1);
-		cpgslw(4);
+		cpgslw(2);
 		for(i=0; i < ncontinentes; i++) {
 			if (continentes[i][0] == -999 && continentes[i][1] == 999 ) {
 				i++;
@@ -922,6 +940,7 @@ int enhance(GRAPHCONTROL *c, SET *p, int i) {
  */
 
 int main(int argc, char **argv) {
+	float lm, hm;
 	int ID;
 	float x1, y1, x2, y2;
 	char ch;
@@ -948,6 +967,7 @@ int main(int argc, char **argv) {
 		if (borders[i][0] != -999 && borders[i][0] > 180)
 			borders[i][0] = borders[i][0] - 360.0;
 
+	lm = hm = -1.0;
 	while (ch != 'Q') {
 		if (control.printout) {
 			lerchar("Entre com o nome do arquivo", filename, 1000);
@@ -974,7 +994,7 @@ int main(int argc, char **argv) {
 
 		if (mainset.region) {
 			plotsection(&mainset, &control, sectionmode);
-			plothistogram(&mainset, binw, histmode);
+			plothistogram(&mainset, binw, histmode, lm, hm);
 		}
 
 		if (control.printout) {
@@ -1107,6 +1127,14 @@ int main(int argc, char **argv) {
 			break;
 		}
 
+		case('J'): { /* Ajuste */
+			lm = lerfloat("Entre com o menor valor de mag. para ajuste.");
+			hm = lerfloat("Entre com o maior valor de mag. para ajuste.");
+			if (lm == hm) {
+				lm = hm = -1;
+			}
+			break;
+		}
 		case('P'): { /* Profundidade */
 			float d1, d2;
 			d1 = lerfloat("Entre com a Profundidade Minima?");
